@@ -50,103 +50,100 @@ export default function SearchPage() {
         setError(data.message || "No results found");
       }
     } catch {
-      setError("Unable to connect to the blockchain server. Please ensure the server is running on port 8080.");
+      setError("Unable to connect to the blockchain ledger.");
       setResults([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "Active":
-        return "✅";
-      case "Transferred":
-        return "🔄";
-      case "Disputed":
-        return "⚠️";
-      case "Revoked":
-        return "❌";
-      default:
-        return "📄";
-    }
-  };
-
-  const getStatusClass = (status: string) => {
-    switch (status) {
-      case "Active":
-        return "active";
-      case "Transferred":
-        return "transferred";
-      case "Disputed":
-        return "disputed";
-      default:
-        return "active";
-    }
+  const statusMap = {
+    Active: { label: "Active", className: "status-Active" },
+    Transferred: { label: "Transferred", className: "status-Transferred" },
+    Disputed: { label: "Disputed", className: "status-Disputed" },
+    Revoked: { label: "Revoked", className: "status-Revoked" },
   };
 
   return (
-    <section className="search-section">
-      <div className="search-header">
-        <h1>
-          Search Land <span style={{ color: "var(--gold)" }}>Titles</span>
-        </h1>
-        <p>Search by Title ID, Owner Name, National ID, District, or Plot Number</p>
-      </div>
+    <div className="container" style={{ paddingBottom: 120 }}>
+      {/* Glow Effect */}
+      <div className="hero-glow" style={{ top: "30%", opacity: 0.3 }} />
 
-      <form onSubmit={handleSearch} className="search-box">
-        <input
-          type="text"
-          className="input"
-          placeholder="e.g. UG-A1B2C3D4, John Mukasa, Wakiso, Block 123 Plot 45..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          id="search-input"
-        />
-        <button type="submit" className="btn btn-primary" id="search-button" disabled={loading}>
-          {loading ? "Searching..." : "🔍 Search"}
-        </button>
-      </form>
-
-      {error && <div className="error-banner">{error}</div>}
-
-      {loading && (
-        <div className="loading-spinner">
-          <div className="spinner"></div>
+      <section className="search-container animate-fade-up">
+        <div className="page-header">
+          <h1>Verify Provenance</h1>
+          <p>Instantly confirm authenticity by Title ID, Owner, or Geographical Identity.</p>
         </div>
-      )}
 
-      {!loading && searched && results.length === 0 && !error && (
-        <div className="empty-state">
-          <div className="empty-state-icon">🔍</div>
-          <p>No titles found matching &quot;{query}&quot;</p>
-          <p style={{ fontSize: "0.85rem", marginTop: 8 }}>
-            Try searching with a different term or check the Title ID format (e.g. UG-XXXXXXXX)
-          </p>
-        </div>
-      )}
-
-      <div className="results-list">
-        {results.map((title) => (
-          <div key={title.title_id} className="card title-card">
-            <div className={`title-card-status ${getStatusClass(title.status)}`}>
-              {getStatusIcon(title.status)}
-            </div>
-            <div className="title-card-info">
-              <div className="title-card-id">{title.title_id}</div>
-              <h3>{title.owner_name}</h3>
-              <div className="title-card-location">
-                📍 {title.village}, {title.parish}, {title.district} — {title.plot_number} ({title.size_acres} acres)
-              </div>
-            </div>
-            <div className="title-card-action">
-              <a href={`/titles/${title.title_id}`} className="btn btn-secondary">
-                View Details →
-              </a>
-            </div>
+        <form onSubmit={handleSearch} className="search-bar animate-fade-up delay-1">
+          <div className="search-icon-abs">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
           </div>
-        ))}
-      </div>
-    </section>
+          <input
+            type="text"
+            className="input-modern"
+            placeholder="e.g. UG-A1B2C3D4, John, Wakiso..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            disabled={loading}
+          />
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? "Querying..." : "Verify Record"}
+          </button>
+        </form>
+
+        {error && <div className="banner banner-error animate-fade-up">{error}</div>}
+
+        {loading && (
+          <div className="spinner-wrap">
+            <div className="spinner-modern"></div>
+          </div>
+        )}
+
+        {!loading && searched && results.length === 0 && !error && (
+          <div className="glass-card animate-fade-up" style={{ textAlign: "center", marginTop: 40 }}>
+            <p style={{ color: "var(--text-muted)", fontSize: "1.1rem" }}>
+              No cryptic records returned for &quot;<strong>{query}</strong>&quot;
+            </p>
+          </div>
+        )}
+
+        <div style={{ marginTop: 40 }}>
+          {results.map((title, i) => {
+            const statusInfo = statusMap[title.status as keyof typeof statusMap] || statusMap.Active;
+            return (
+              <a 
+                href={`/titles/${title.title_id}`} 
+                key={title.title_id} 
+                className="result-card animate-fade-up"
+                style={{ animationDelay: `${0.1 * (i + 1)}s` }}
+              >
+                <div className={`status-dot ${statusInfo.className}`}></div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: "1.2rem", fontWeight: 500, marginBottom: 4 }}>
+                    {title.owner_name}
+                  </div>
+                  <div style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>
+                    {title.district} — {title.plot_number} • {title.size_acres} Acres
+                  </div>
+                </div>
+                <div style={{ fontFamily: "monospace", color: "var(--accent-gold)", fontSize: "0.85rem", letterSpacing: "1px" }}>
+                  {title.title_id}
+                </div>
+                <div style={{ color: "var(--border-light)" }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                  </svg>
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      </section>
+    </div>
   );
 }

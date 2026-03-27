@@ -73,189 +73,113 @@ export default function RegisterPage() {
         setError(data.message || "Registration failed");
       }
     } catch {
-      setError(
-        "Unable to connect to the blockchain server. Please ensure the Rust backend is running on port 8080."
-      );
+      setError("Unable to connect to the blockchain server.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <section className="register-section">
-      <div className="register-header">
-        <h1>
-          Register Land <span style={{ color: "var(--gold)" }}>Title</span>
-        </h1>
-        <p>Record your land ownership on the blockchain for permanent, tamper-proof protection</p>
-      </div>
+    <div className="container" style={{ paddingBottom: 120 }}>
+      {/* Background glow specific to registration */}
+      <div className="hero-glow" style={{ background: "radial-gradient(circle at center, rgba(46, 204, 113, 0.1) 0%, transparent 60%)" }}></div>
+      
+      <section className="form-container animate-fade-up">
+        <div className="page-header">
+          <h1>Issue New Title</h1>
+          <p>Commit immutable ownership data to the cryptographic ledger.</p>
+        </div>
 
-      {success && (
-        <div className="success-banner">
-          ✅ Title <strong>{success.title_id}</strong> registered successfully on the blockchain!
-          <br />
-          <span style={{ fontSize: "0.9rem", opacity: 0.85 }}>
-            Owner: {success.owner_name} | District: {success.district} | Plot: {success.plot_number}
-          </span>
-          <div style={{ marginTop: 12 }}>
-            <a
-              href={`/titles/${success.title_id}`}
-              className="btn btn-green"
-              style={{ fontSize: "0.85rem", padding: "8px 20px" }}
-            >
-              View Title →
+        {success && (
+          <div className="banner banner-success animate-fade-up">
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: "Space Grotesk", fontSize: "1.1rem", marginBottom: 4 }}>
+                Successfully Mined Block
+              </div>
+              <div style={{ opacity: 0.8, fontSize: "0.85rem" }}>
+                Title <strong>{success.title_id}</strong> registered for {success.owner_name}
+              </div>
+            </div>
+            <a href={`/titles/${success.title_id}`} className="btn btn-primary" style={{ height: 36, fontSize: "0.85rem" }}>
+              View Title
             </a>
           </div>
-        </div>
-      )}
+        )}
 
-      {error && <div className="error-banner">❌ {error}</div>}
+        {error && <div className="banner banner-error animate-fade-up">{error}</div>}
 
-      <form onSubmit={handleSubmit} className="card" style={{ padding: 32 }}>
-        <div className="form-grid">
-          {/* Owner Information */}
-          <div className="form-section-title">👤 Owner Information</div>
-
-          <div className="input-group">
-            <label htmlFor="owner_name">Full Name</label>
-            <input
-              type="text"
-              className="input"
-              id="owner_name"
-              name="owner_name"
-              placeholder="e.g. John Mukasa Ssempijja"
-              required
-            />
+        <form onSubmit={handleSubmit} className="glass-card animate-fade-up delay-1">
+          {/* Identity block */}
+          <h3 style={{ fontFamily: "Space Grotesk", fontSize: "1.2rem", marginBottom: 24, paddingBottom: 12, borderBottom: "1px dashed var(--border-light)" }}>
+            01. Personal Identity
+          </h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
+            <div className="form-group">
+              <label>Legal Full Name</label>
+              <input type="text" name="owner_name" className="input-modern" required placeholder="John Mukasa Ssempijja" />
+            </div>
+            <div className="form-group">
+              <label>National ID No.</label>
+              <input type="text" name="national_id" className="input-modern" required placeholder="CM1234..." />
+            </div>
           </div>
 
-          <div className="input-group">
-            <label htmlFor="national_id">National ID Number</label>
-            <input
-              type="text"
-              className="input"
-              id="national_id"
-              name="national_id"
-              placeholder="e.g. CM1234567890AB"
-              required
-            />
+          <h3 style={{ fontFamily: "Space Grotesk", fontSize: "1.2rem", margin: "32px 0 24px", paddingBottom: 12, borderBottom: "1px dashed var(--border-light)" }}>
+            02. Geographic Location
+          </h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
+            <div className="form-group">
+              <label>District</label>
+              <select name="district" className="input-modern" required style={{ appearance: "none" }}>
+                <option value="">Select District</option>
+                {UGANDA_DISTRICTS.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>County</label>
+              <input type="text" name="county" className="input-modern" required />
+            </div>
+            <div className="form-group">
+              <label>Sub County</label>
+              <input type="text" name="sub_county" className="input-modern" required />
+            </div>
+            <div className="form-group">
+              <label>Parish</label>
+              <input type="text" name="parish" className="input-modern" required />
+            </div>
+            <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+              <label>Village</label>
+              <input type="text" name="village" className="input-modern" required />
+            </div>
           </div>
 
-          {/* Location Information */}
-          <div className="form-section-title">📍 Land Location</div>
-
-          <div className="input-group">
-            <label htmlFor="district">District</label>
-            <select className="input" id="district" name="district" required>
-              <option value="">Select District</option>
-              {UGANDA_DISTRICTS.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
+          <h3 style={{ fontFamily: "Space Grotesk", fontSize: "1.2rem", margin: "32px 0 24px", paddingBottom: 12, borderBottom: "1px dashed var(--border-light)" }}>
+            03. Property Specifications
+          </h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
+            <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+              <label>Plot / Block Reference</label>
+              <input type="text" name="plot_number" className="input-modern" required placeholder="Block 123 Plot 45" />
+            </div>
+            <div className="form-group">
+              <label>Acreage</label>
+              <input type="number" name="size_acres" className="input-modern" step="0.01" min="0.01" required placeholder="2.5" />
+            </div>
+            <div className="form-group">
+              <label>GPS Coordinates</label>
+              <input type="text" name="coordinates" className="input-modern" placeholder="0.3476° N, 32.5825° E" />
+            </div>
           </div>
 
-          <div className="input-group">
-            <label htmlFor="county">County</label>
-            <input
-              type="text"
-              className="input"
-              id="county"
-              name="county"
-              placeholder="e.g. Busiro"
-              required
-            />
-          </div>
-
-          <div className="input-group">
-            <label htmlFor="sub_county">Sub County</label>
-            <input
-              type="text"
-              className="input"
-              id="sub_county"
-              name="sub_county"
-              placeholder="e.g. Nangabo"
-              required
-            />
-          </div>
-
-          <div className="input-group">
-            <label htmlFor="parish">Parish</label>
-            <input
-              type="text"
-              className="input"
-              id="parish"
-              name="parish"
-              placeholder="e.g. Gayaza"
-              required
-            />
-          </div>
-
-          <div className="input-group">
-            <label htmlFor="village">Village</label>
-            <input
-              type="text"
-              className="input"
-              id="village"
-              name="village"
-              placeholder="e.g. Kayebe"
-              required
-            />
-          </div>
-
-          {/* Land Details */}
-          <div className="form-section-title">🏘️ Land Details</div>
-
-          <div className="input-group">
-            <label htmlFor="plot_number">Plot / Block Number</label>
-            <input
-              type="text"
-              className="input"
-              id="plot_number"
-              name="plot_number"
-              placeholder="e.g. Block 123 Plot 45"
-              required
-            />
-          </div>
-
-          <div className="input-group">
-            <label htmlFor="size_acres">Size (Acres)</label>
-            <input
-              type="number"
-              className="input"
-              id="size_acres"
-              name="size_acres"
-              placeholder="e.g. 2.5"
-              step="0.01"
-              min="0.01"
-              required
-            />
-          </div>
-
-          <div className="input-group full-width">
-            <label htmlFor="coordinates">GPS Coordinates (Optional)</label>
-            <input
-              type="text"
-              className="input"
-              id="coordinates"
-              name="coordinates"
-              placeholder="e.g. 0.3476° N, 32.5825° E"
-            />
-          </div>
-
-          {/* Submit */}
-          <div className="form-actions">
-            <button
-              type="submit"
-              className="btn btn-primary btn-lg"
-              id="register-button"
-              disabled={loading}
-            >
-              {loading ? "⛏️ Mining Block..." : "⛓️ Register on Blockchain"}
+          <div style={{ marginTop: 40, textAlign: "right" }}>
+            <button type="submit" className="btn btn-primary btn-lg" disabled={loading} style={{ width: "100%" }}>
+              {loading ? "Writing to Blockchain..." : "Hash & Register Protocol"}
             </button>
           </div>
-        </div>
-      </form>
-    </section>
+        </form>
+      </section>
+    </div>
   );
 }

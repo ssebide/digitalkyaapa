@@ -44,7 +44,6 @@ export default function TitleDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Transfer state
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferLoading, setTransferLoading] = useState(false);
   const [transferSuccess, setTransferSuccess] = useState("");
@@ -63,14 +62,14 @@ export default function TitleDetailPage() {
         if (titleData.success) {
           setTitle(titleData.data);
         } else {
-          setError("Title not found on the blockchain");
+          setError("Record not found on the ledger.");
         }
 
         if (historyData.success) {
           setHistory(historyData.data || []);
         }
       } catch {
-        setError("Unable to connect to the blockchain server. Ensure it is running on port 8080.");
+        setError("Network error connecting to the blockchain node.");
       } finally {
         setLoading(false);
       }
@@ -98,9 +97,8 @@ export default function TitleDetailPage() {
 
       const data = await res.json();
       if (data.success) {
-        setTransferSuccess(`Title transferred to ${body.to_owner} successfully!`);
+        setTransferSuccess(`Ownership cryptographically verified to ${body.to_owner}.`);
         setShowTransfer(false);
-        // Refresh data
         const titleRes = await fetch(`/api/titles/${titleId}`);
         const historyRes = await fetch(`/api/titles/${titleId}/history`);
         const titleData = await titleRes.json();
@@ -111,242 +109,165 @@ export default function TitleDetailPage() {
         setError(data.message);
       }
     } catch {
-      setError("Transfer failed. Ensure the blockchain server is running.");
+      setError("Smart contract execution failed.");
     } finally {
       setTransferLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <section className="detail-section">
-        <div className="loading-spinner">
-          <div className="spinner"></div>
-        </div>
-      </section>
-    );
-  }
-
-  if (error && !title) {
-    return (
-      <section className="detail-section">
-        <div className="error-banner">{error}</div>
-        <div className="empty-state">
-          <div className="empty-state-icon">🔍</div>
-          <p>Title {titleId} was not found on the blockchain</p>
-          <a href="/search" className="btn btn-primary" style={{ marginTop: 20 }}>
-            ← Back to Search
-          </a>
-        </div>
-      </section>
-    );
-  }
-
-  if (!title) return null;
-
   const formatDate = (dateStr: string) => {
     try {
       return new Date(dateStr).toLocaleDateString("en-UG", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
+        year: "numeric", month: "long", day: "numeric",
+        hour: "2-digit", minute: "2-digit",
       });
     } catch {
       return dateStr;
     }
   };
 
+  if (loading) {
+    return (
+      <div className="container spinner-wrap">
+        <div className="spinner-modern"></div>
+      </div>
+    );
+  }
+
+  if (error && !title) {
+    return (
+      <div className="container" style={{ paddingTop: 100, maxWidth: 600 }}>
+        <div className="banner banner-error">{error}</div>
+        <a href="/search" className="btn btn-secondary" style={{ marginTop: 24 }}>← Return to Ledger Search</a>
+      </div>
+    );
+  }
+
+  if (!title) return null;
+
   return (
-    <section className="detail-section">
-      {/* Header */}
-      <div className="detail-header">
-        <a href="/search" className="btn btn-secondary" style={{ padding: "8px 16px", fontSize: "0.85rem" }}>
-          ← Back
-        </a>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: "monospace", color: "var(--gold)", fontSize: "0.9rem", fontWeight: 600 }}>
-            {title.title_id}
-          </div>
-          <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1.8rem", fontWeight: 700, marginTop: 4 }}>
-            {title.owner_name}
-          </h1>
+    <div className="container" style={{ paddingBottom: 120, paddingTop: 60, maxWidth: 900 }}>
+      {/* Glow Effect */}
+      <div className="hero-glow" style={{ top: "20%", background: "radial-gradient(circle at center, rgba(245, 215, 110, 0.08) 0%, transparent 60%)" }} />
+
+      <a href="/search" className="btn btn-secondary" style={{ marginBottom: 40, height: 36, padding: "0 16px", fontSize: "0.85rem" }}>
+        ← Explore Ledger
+      </a>
+
+      <div className="animate-fade-up">
+        <div style={{ fontFamily: "monospace", color: "var(--accent-gold)", fontSize: "1rem", letterSpacing: "1px", marginBottom: 8 }}>
+          {title.title_id}
         </div>
-        <div className={`detail-badge ${title.status.toLowerCase()}`}>{title.status}</div>
+        <h1 style={{ fontFamily: "Space Grotesk", fontSize: "3rem", fontWeight: 700, marginBottom: 12 }}>
+          {title.owner_name}
+        </h1>
+        <div style={{ display: "inline-block", padding: "4px 12px", borderRadius: 4, background: "rgba(255,255,255,0.05)", border: "1px solid var(--border-light)", fontSize: "0.85rem", color: "var(--text-muted)", textTransform: "uppercase" }}>
+          Status: <strong style={{ color: "var(--text-main)" }}>{title.status}</strong>
+        </div>
       </div>
 
-      {transferSuccess && <div className="success-banner">✅ {transferSuccess}</div>}
-      {error && title && <div className="error-banner">❌ {error}</div>}
+      {transferSuccess && <div className="banner banner-success animate-fade-up delay-1" style={{ marginTop: 40 }}>{transferSuccess}</div>}
+      {error && <div className="banner banner-error animate-fade-up delay-1" style={{ marginTop: 40 }}>{error}</div>}
 
-      {/* Title Details */}
-      <div className="card" style={{ marginBottom: 32 }}>
-        <h2
-          style={{
-            fontFamily: "'Outfit', sans-serif",
-            fontSize: "1.2rem",
-            fontWeight: 600,
-            marginBottom: 20,
-            color: "var(--gold)",
-          }}
-        >
-          📋 Title Information
-        </h2>
-        <div className="detail-grid">
-          <div className="detail-item">
-            <div className="detail-item-label">Title ID</div>
-            <div className="detail-item-value" style={{ fontFamily: "monospace" }}>{title.title_id}</div>
+      <div className="detail-grid animate-fade-up delay-1">
+        <div className="detail-item">
+          <div className="detail-label">National Identity</div>
+          <div className="detail-val mono">{title.national_id}</div>
+        </div>
+        <div className="detail-item">
+          <div className="detail-label">District</div>
+          <div className="detail-val">{title.district}</div>
+        </div>
+        <div className="detail-item">
+          <div className="detail-label">County</div>
+          <div className="detail-val">{title.county}</div>
+        </div>
+        <div className="detail-item">
+          <div className="detail-label">Sub County</div>
+          <div className="detail-val">{title.sub_county}</div>
+        </div>
+        <div className="detail-item">
+          <div className="detail-label">Parish</div>
+          <div className="detail-val">{title.parish}</div>
+        </div>
+        <div className="detail-item">
+          <div className="detail-label">Village</div>
+          <div className="detail-val">{title.village}</div>
+        </div>
+        <div className="detail-item" style={{ gridColumn: "1 / -1" }}>
+          <div className="detail-label">Geographical Coordinates</div>
+          <div className="detail-val" style={{ color: "var(--text-muted)" }}>{title.coordinates || "Unmapped Protocol Area"}</div>
+        </div>
+        <div className="detail-item" style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div className="detail-label">Plot & Acreage</div>
+            <div className="detail-val">Plot {title.plot_number} ({title.size_acres} Acres)</div>
           </div>
-          <div className="detail-item">
-            <div className="detail-item-label">Owner</div>
-            <div className="detail-item-value">{title.owner_name}</div>
-          </div>
-          <div className="detail-item">
-            <div className="detail-item-label">National ID</div>
-            <div className="detail-item-value" style={{ fontFamily: "monospace" }}>{title.national_id}</div>
-          </div>
-          <div className="detail-item">
-            <div className="detail-item-label">District</div>
-            <div className="detail-item-value">{title.district}</div>
-          </div>
-          <div className="detail-item">
-            <div className="detail-item-label">County</div>
-            <div className="detail-item-value">{title.county}</div>
-          </div>
-          <div className="detail-item">
-            <div className="detail-item-label">Sub County</div>
-            <div className="detail-item-value">{title.sub_county}</div>
-          </div>
-          <div className="detail-item">
-            <div className="detail-item-label">Parish</div>
-            <div className="detail-item-value">{title.parish}</div>
-          </div>
-          <div className="detail-item">
-            <div className="detail-item-label">Village</div>
-            <div className="detail-item-value">{title.village}</div>
-          </div>
-          <div className="detail-item">
-            <div className="detail-item-label">Plot Number</div>
-            <div className="detail-item-value">{title.plot_number}</div>
-          </div>
-          <div className="detail-item">
-            <div className="detail-item-label">Size</div>
-            <div className="detail-item-value">{title.size_acres} Acres</div>
-          </div>
-          {title.coordinates && (
-            <div className="detail-item" style={{ gridColumn: "1 / -1" }}>
-              <div className="detail-item-label">GPS Coordinates</div>
-              <div className="detail-item-value">{title.coordinates}</div>
-            </div>
+          {title.status !== "Revoked" && (
+            <button className="btn btn-primary" onClick={() => setShowTransfer(!showTransfer)}>
+              Execute Transfer
+            </button>
           )}
-          <div className="detail-item">
-            <div className="detail-item-label">Registered</div>
-            <div className="detail-item-value">{formatDate(title.registered_at)}</div>
-          </div>
-          <div className="detail-item">
-            <div className="detail-item-label">Status</div>
-            <div className="detail-item-value">
-              {title.status === "Active" ? "✅" : title.status === "Transferred" ? "🔄" : "⚠️"}{" "}
-              {title.status}
-            </div>
-          </div>
         </div>
-
-        {/* Transfer Button */}
-        <div style={{ marginTop: 20, display: "flex", gap: 12 }}>
-          <button
-            className="btn btn-primary"
-            onClick={() => setShowTransfer(!showTransfer)}
-          >
-            🔄 Transfer Ownership
-          </button>
-        </div>
-
-        {/* Transfer Form */}
-        {showTransfer && (
-          <form onSubmit={handleTransfer} style={{ marginTop: 24, padding: "20px", background: "rgba(255,255,255,0.03)", borderRadius: "var(--radius)", border: "1px solid var(--glass-border)" }}>
-            <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1rem", fontWeight: 600, marginBottom: 16 }}>
-              Transfer to New Owner
-            </h3>
-            <div className="form-grid">
-              <div className="input-group">
-                <label htmlFor="to_owner">New Owner Full Name</label>
-                <input type="text" className="input" id="to_owner" name="to_owner" placeholder="e.g. Jane Nakato" required />
-              </div>
-              <div className="input-group">
-                <label htmlFor="to_national_id">New Owner National ID</label>
-                <input type="text" className="input" id="to_national_id" name="to_national_id" placeholder="e.g. CF9876543210" required />
-              </div>
-              <div className="form-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowTransfer(false)}>Cancel</button>
-                <button type="submit" className="btn btn-green" disabled={transferLoading}>
-                  {transferLoading ? "Processing..." : "⛓️ Confirm Transfer"}
-                </button>
-              </div>
-            </div>
-          </form>
-        )}
       </div>
 
-      {/* Ownership History */}
-      <div className="card">
-        <h2
-          style={{
-            fontFamily: "'Outfit', sans-serif",
-            fontSize: "1.2rem",
-            fontWeight: 600,
-            marginBottom: 24,
-            color: "var(--gold)",
-          }}
-        >
-          📜 Ownership History (Blockchain)
-        </h2>
+      {showTransfer && (
+        <form onSubmit={handleTransfer} className="glass-card animate-fade-up" style={{ marginBottom: 40 }}>
+          <h3 style={{ fontFamily: "Space Grotesk", fontSize: "1.2rem", marginBottom: 20 }}>Initate Smart Contract Transfer</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+            <div className="form-group">
+              <label>Beneficiary Name</label>
+              <input type="text" className="input-modern" name="to_owner" required placeholder="Receiving Owner" />
+            </div>
+            <div className="form-group">
+              <label>Beneficiary National ID</label>
+              <input type="text" className="input-modern" name="to_national_id" required placeholder="ID Number" />
+            </div>
+            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 12 }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowTransfer(false)}>Abort</button>
+              <button type="submit" className="btn btn-accent" disabled={transferLoading}>
+                {transferLoading ? "Awaiting Block..." : "Sign & Transfer"}
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      <div className="animate-fade-up delay-2">
+        <h2 style={{ fontFamily: "Space Grotesk", fontSize: "1.8rem", marginBottom: 12 }}>Ledger Provenance</h2>
+        <p style={{ color: "var(--text-muted)", marginBottom: 32 }}>Immutable cryptographic history of ownership transfers.</p>
 
         {history.length === 0 ? (
-          <div className="empty-state" style={{ padding: 30 }}>
-            <p>No history available</p>
-          </div>
+          <div className="glass-card" style={{ textAlign: "center", color: "var(--text-muted)" }}>No historical blocks found.</div>
         ) : (
-          <div className="timeline">
+          <div className="modern-timeline">
             {history.map((entry, i) => {
-              const blockIndex = entry[0];
-              const timestamp = entry[1];
-              const tx = entry[2];
-
-              if (tx.Register) {
-                return (
-                  <div key={i} className="timeline-item">
-                    <div className="timeline-date">
-                      Block #{blockIndex} — {formatDate(timestamp)}
-                    </div>
-                    <div className="timeline-content">
-                      🆕 <strong>Title Registered</strong> — Owner: {tx.Register.title.owner_name} (
-                      {tx.Register.title.national_id})
-                    </div>
+              const [blockIndex, timestamp, tx] = entry;
+              const isRegister = !!tx.Register;
+              return (
+                <div key={i} className="timeline-event">
+                  <div className="timeline-dot" />
+                  <div className="timeline-date">Block Hash Index #{blockIndex} • {formatDate(timestamp)}</div>
+                  <div className="timeline-content">
+                    {isRegister ? (
+                      <div>
+                        <strong style={{ color: "var(--accent-green)" }}>Genesis Registration</strong><br />
+                        Mined by owner <strong style={{ color: "var(--text-main)" }}>{tx.Register?.title.owner_name}</strong>
+                      </div>
+                    ) : (
+                      <div>
+                        <strong style={{ color: "var(--accent-gold)" }}>Digital Transfer</strong><br />
+                        Provenance transferred from <strong>{tx.Transfer?.from_owner}</strong> to <strong style={{ color: "var(--text-main)" }}>{tx.Transfer?.to_owner}</strong>
+                      </div>
+                    )}
                   </div>
-                );
-              }
-
-              if (tx.Transfer) {
-                return (
-                  <div key={i} className="timeline-item">
-                    <div className="timeline-date">
-                      Block #{blockIndex} — {formatDate(timestamp)}
-                    </div>
-                    <div className="timeline-content">
-                      🔄 <strong>Ownership Transferred</strong>
-                      <br />
-                      From: {tx.Transfer.from_owner} → To: {tx.Transfer.to_owner}
-                    </div>
-                  </div>
-                );
-              }
-
-              return null;
+                </div>
+              );
             })}
           </div>
         )}
       </div>
-    </section>
+
+    </div>
   );
 }

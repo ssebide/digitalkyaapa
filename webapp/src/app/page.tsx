@@ -1,129 +1,80 @@
 export default function HomePage() {
   return (
     <>
-      {/* Hero Section */}
       <section className="hero">
-        <div className="hero-content">
-          <div className="hero-badge">🇺🇬 Blockchain-Powered Land Registry</div>
-          <h1>
-            Securing Uganda&apos;s Land <span className="highlight">Titles</span> on the Blockchain
+        <div className="hero-glow"></div>
+        <div className="container">
+          <div className="hero-badge animate-fade-up">
+            <span></span> Live on the Blockchain
+          </div>
+          <h1 className="animate-fade-up delay-1">
+            Immutable Land Titles for a Secure Uganda
           </h1>
-          <p>
-            DigitalKyapa uses blockchain technology to create tamper-proof, transparent records of land
-            ownership — ending land wrangles and protecting every Ugandan&apos;s property rights.
+          <p className="hero-sub animate-fade-up delay-2">
+            DigitalKyapa leverages cryptographic zero-trust architecture to create
+            tamper-proof land records. Eradicate fraud, resolve disputes, and
+            verify ownership instantly.
           </p>
-          <div className="hero-buttons">
+          <div className="hero-actions animate-fade-up delay-3">
             <a href="/search" className="btn btn-primary btn-lg">
-              🔍 Search Titles
+              Verify Title
             </a>
             <a href="/register" className="btn btn-secondary btn-lg">
-              📝 Register a Title
+              Register Land
             </a>
           </div>
         </div>
       </section>
 
-      {/* Stats */}
-      <section className="stats-bar">
-        <div className="stat-item">
-          <div className="stat-number">100%</div>
-          <div className="stat-label">Tamper-proof Records</div>
-        </div>
-        <div className="stat-item">
-          <div className="stat-number">24/7</div>
-          <div className="stat-label">Access Availability</div>
-        </div>
-        <div className="stat-item">
-          <div className="stat-number">SHA-256</div>
-          <div className="stat-label">Cryptographic Security</div>
-        </div>
-        <div className="stat-item">
-          <div className="stat-number">0</div>
-          <div className="stat-label">Land Wrangles</div>
-        </div>
-      </section>
+      <section className="features-section">
+        <div className="container">
+          <div className="section-header animate-fade-up">
+            <h2>The New Standard of Trust</h2>
+            <p>Built exclusively for the Ugandan land registry ecosystem.</p>
+          </div>
 
-      {/* Features */}
-      <section className="features">
-        <div className="section-title">
-          <h2>Why DigitalKyapa?</h2>
-          <p>Built for Uganda, powered by blockchain technology</p>
-        </div>
-        <div className="features-grid">
-          <div className="card card-glow">
-            <div className="feature-icon gold">🔗</div>
-            <div className="feature-title">Immutable Records</div>
-            <div className="feature-desc">
-              Every land title is recorded on the blockchain with SHA-256 cryptographic hashing.
-              Once registered, records cannot be altered or deleted — your title is safe forever.
+          <div className="bento-grid">
+            {/* Bento Card 1 (Wide) */}
+            <div className="bento-card bento-wide animate-fade-up delay-1">
+              <div className="bento-icon">⛓️</div>
+              <h3 className="bento-title">Cryptographic Immutability</h3>
+              <p className="bento-desc">
+                Every transaction is hashed using SHA-256 and linked perpetually. 
+                Once a title is registered or transferred, the record cannot be 
+                altered or deleted by any central authority.
+              </p>
             </div>
-          </div>
-          <div className="card card-glow">
-            <div className="feature-icon green">🔍</div>
-            <div className="feature-title">Instant Verification</div>
-            <div className="feature-desc">
-              Verify any land title in seconds. Search by title ID, owner name, national ID,
-              district, or plot number. Know exactly who owns what land.
-            </div>
-          </div>
-          <div className="card card-glow">
-            <div className="feature-icon red">🛡️</div>
-            <div className="feature-title">Fraud Prevention</div>
-            <div className="feature-desc">
-              No more fake titles or double registrations. The blockchain ensures each plot of land
-              has one verified owner with a complete, transparent ownership history.
-            </div>
-          </div>
-          <div className="card card-glow">
-            <div className="feature-icon gold">📋</div>
-            <div className="feature-title">Complete History</div>
-            <div className="feature-desc">
-              Track the full ownership history of any land parcel. Every transfer, every owner —
-              all transparently recorded on the blockchain.
-            </div>
-          </div>
-          <div className="card card-glow">
-            <div className="feature-icon green">🏘️</div>
-            <div className="feature-title">Uganda-Specific</div>
-            <div className="feature-desc">
-              Designed for Uganda&apos;s land system. Supports all districts, counties, sub-counties,
-              parishes, and villages across the country.
-            </div>
-          </div>
-          <div className="card card-glow">
-            <div className="feature-icon red">🤝</div>
-            <div className="feature-title">Secure Transfers</div>
-            <div className="feature-desc">
-              Transfer land ownership securely through the blockchain. Both parties are recorded,
-              creating an indisputable chain of custody.
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* CTA Section */}
-      <section style={{ padding: "60px 2rem 80px", textAlign: "center" }}>
-        <div className="card" style={{ maxWidth: 700, margin: "0 auto", padding: "48px 40px" }}>
-          <h2
-            style={{
-              fontFamily: "'Outfit', sans-serif",
-              fontSize: "2rem",
-              fontWeight: 700,
-              marginBottom: 12,
-            }}
-          >
-            Ready to Secure Your Land?
-          </h2>
-          <p style={{ color: "var(--gray-light)", marginBottom: 28, fontSize: "1.05rem" }}>
-            Register your land title on the blockchain today and protect your property rights forever.
-          </p>
-          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-            <a href="/register" className="btn btn-green btn-lg">
-              Register Now
-            </a>
-            <a href="/search" className="btn btn-secondary btn-lg">
-              Verify a Title
-            </a>
+            {/* Bento Card 2 (Standard) */}
+            <div className="bento-card animate-fade-up delay-2">
+              <div className="bento-icon">⚡</div>
+              <h3 className="bento-title">Instant Verification</h3>
+              <p className="bento-desc">
+                Query the distributed ledger in milliseconds to verify absolute ownership 
+                and view complete historical provenance of any plot.
+              </p>
+            </div>
+
+            {/* Bento Card 3 (Standard) */}
+            <div className="bento-card animate-fade-up delay-1">
+              <div className="bento-icon">🛡️</div>
+              <h3 className="bento-title">Zero Friction Transfers</h3>
+              <p className="bento-desc">
+                Transfer ownership digitally with guaranteed finality. The smart 
+                contract logic prevents double-spending and unauthorized claims.
+              </p>
+            </div>
+
+            {/* Bento Card 4 (Wide) */}
+            <div className="bento-card bento-wide animate-fade-up delay-2">
+              <div className="bento-icon">🌍</div>
+              <h3 className="bento-title">Nationwide Coverage</h3>
+              <p className="bento-desc">
+                From Kampala to Gulu, every district, county, and village is natively 
+                mapped. GPS coordinates are anchored to precise blockchain states 
+                for indisputable geographical boundaries.
+              </p>
+            </div>
           </div>
         </div>
       </section>

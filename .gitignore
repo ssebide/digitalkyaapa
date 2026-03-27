@@ -1,0 +1,18 @@
+# Rust
+blockchain/target/
+blockchain/blockchain_data.json
+
+# Next.js
+webapp/node_modules/
+webapp/.next/
+webapp/out/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,13 +1,10 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::fs;
-use std::path::Path;
 
 use crate::models::{LandTitle, TitleStatus, Transaction, TransferTitleRequest};
 
 const DIFFICULTY: usize = 2;
-const STORAGE_FILE: &str = "blockchain_data.json";
 
 /// A single block in the blockchain
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,10 +18,10 @@ pub struct Block {
 }
 
 /// The blockchain itself
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Blockchain {
+    pub db: sled::Db,
     pub chain: Vec<Block>,
-    pub pending_transactions: Vec<Transaction>,
 }
 
 impl Block {
@@ -71,52 +68,88 @@ impl Block {
 }
 
 impl Blockchain {
-    /// Create a new blockchain with a genesis block
+    /// Create a new in-memory blockchain for testing
     pub fn new() -> Self {
         let genesis_block = Block::new(0, vec![], String::from("0"));
+        
+        let config = sled::Config::new().temporary(true);
+        let db = config.open().unwrap();
+        
+        let genesis_bytes = bincode::serialize(&genesis_block).unwrap();
+        db.insert(b"block_0", genesis_bytes).unwrap();
+        
+        let length_bytes = bincode::serialize(&1u64).unwrap();
+        db.insert(b"info_length", length_bytes).unwrap();
+        db.flush().unwrap();
+        
         Blockchain {
+            db,
             chain: vec![genesis_block],
-            pending_transactions: vec![],
         }
     }
 
-    /// Load blockchain from disk or create new one
+    /// Load blockchain from disk via sled or create new one
     pub fn load() -> Self {
-        if Path::new(STORAGE_FILE).exists() {
-            match fs::read_to_string(STORAGE_FILE) {
-                Ok(data) => match serde_json::from_str::<Blockchain>(&data) {
-                    Ok(blockchain) => {
-                        println!("✅ Loaded blockchain with {} blocks", blockchain.chain.len());
-                        return blockchain;
+        let db_path = "blockchain_db";
+        let db = sled::open(db_path).unwrap_or_else(|_| panic!("Failed to open sled DB at {}", db_path));
+        let mut chain = Vec::new();
+
+        match db.get(b"info_length") {
+            Ok(Some(length_bytes)) => {
+                let length: u64 = bincode::deserialize(&length_bytes).unwrap_or(0);
+                for i in 0..length {
+                    let key = format!("block_{}", i);
+                    if let Ok(Some(block_bytes)) = db.get(key.as_bytes()) {
+                        if let Ok(block) = bincode::deserialize::<Block>(&block_bytes) {
+                            chain.push(block);
+                        } else {
+                            eprintln!("⚠️ Failed to deserialize block {}", i);
+                        }
+                    } else {
+                        eprintln!("⚠️ Missing block {} in database", i);
                     }
-                    Err(e) => {
-                        eprintln!("⚠️ Failed to parse blockchain data: {}", e);
-                    }
-                },
-                Err(e) => {
-                    eprintln!("⚠️ Failed to read blockchain file: {}", e);
                 }
+                println!("✅ Loaded blockchain with {} blocks from sled DB", chain.len());
+            }
+            _ => {
+                println!("🆕 Creating new blockchain with genesis block in sled");
+                let genesis_block = Block::new(0, vec![], String::from("0"));
+                chain.push(genesis_block.clone());
+                
+                let genesis_bytes = bincode::serialize(&genesis_block).unwrap();
+                db.insert(b"block_0", genesis_bytes).unwrap();
+                
+                let length_bytes = bincode::serialize(&1u64).unwrap();
+                db.insert(b"info_length", length_bytes).unwrap();
+                db.flush().unwrap();
             }
         }
-        println!("🆕 Creating new blockchain with genesis block");
-        Blockchain::new()
+
+        Blockchain { db, chain }
     }
 
-    /// Save blockchain to disk atomically
-    pub fn save(&self) {
-        match serde_json::to_string_pretty(self) {
-            Ok(data) => {
-                let tmp_file = format!("{}.tmp", STORAGE_FILE);
-                if let Err(e) = fs::write(&tmp_file, data) {
-                    eprintln!("⚠️ Failed to write to temporary blockchain file: {}", e);
-                    return;
+    /// Save the newest block to the database (Append-only storage)
+    pub fn save_new_block(&self, block: &Block) {
+        let key = format!("block_{}", block.index);
+        match bincode::serialize(block) {
+            Ok(block_bytes) => {
+                if let Err(e) = self.db.insert(key.as_bytes(), block_bytes) {
+                    eprintln!("⚠️ Failed to write block {} to sled DB: {}", block.index, e);
                 }
-                if let Err(e) = fs::rename(&tmp_file, STORAGE_FILE) {
-                    eprintln!("⚠️ Failed to atomic rename blockchain file: {}", e);
+                
+                let new_length = block.index + 1;
+                if let Ok(length_bytes) = bincode::serialize(&new_length) {
+                    if let Err(e) = self.db.insert(b"info_length", length_bytes) {
+                        eprintln!("⚠️ Failed to update chain length in sled: {}", e);
+                    }
+                }
+                
+                if let Err(e) = self.db.flush() {
+                    eprintln!("⚠️ Failed to flush sled DB to disk: {}", e);
                 }
             }
             Err(e) => {
-                eprintln!("⚠️ Failed to serialize blockchain: {}", e);
+                eprintln!("⚠️ Failed to serialize block: {}", e);
             }
         }
     }
@@ -148,8 +181,10 @@ impl Blockchain {
             vec![transaction],
             previous_hash,
         );
-        self.chain.push(new_block);
-        self.save();
+        self.chain.push(new_block.clone());
+        
+        // Persist only the new block directly to DB
+        self.save_new_block(&new_block);
         Ok(self.chain.last().unwrap())
     }
 
@@ -176,22 +211,18 @@ impl Blockchain {
             let current = &self.chain[i];
             let previous = &self.chain[i - 1];
 
-            // Check index sequentially
             if current.index != previous.index + 1 {
                 return false;
             }
 
-            // Check hash linkage
             if current.previous_hash != previous.hash {
                 return false;
             }
 
-            // Verify the hash hasn't been tampered with
             if current.hash != current.calculate_hash() {
                 return false;
             }
 
-            // Verify the hash meets difficulty
             if !current.hash.starts_with(&target) {
                 return false;
             }
@@ -255,7 +286,7 @@ impl Blockchain {
         history
     }
 
-    /// Search titles by query (owner name, district, village, plot number)
+    /// Search titles by query
     pub fn search_titles(&self, query: &str, district: Option<&str>) -> Vec<LandTitle> {
         let query_lower = query.to_lowercase();
         self.get_all_titles()
@@ -380,7 +411,6 @@ mod tests {
             coordinates: None,
         });
         
-        // Use different ID/Owner but same plot and district to simulate duplicate claim
         let title2 = LandTitle::new(RegisterTitleRequest {
             owner_name: "Bob".to_string(),
             national_id: "ID2".to_string(),
@@ -416,7 +446,6 @@ mod tests {
         });
         blockchain.add_transaction(Transaction::Register { title }).unwrap();
         
-        // Tamper with the block data without updating the hash
         blockchain.chain[1].nonce += 1;
         assert!(!blockchain.is_valid());
     }
@@ -438,10 +467,7 @@ mod tests {
         });
         blockchain.add_transaction(Transaction::Register { title }).unwrap();
         
-        // Tamper with the previous hash linkage
         blockchain.chain[1].previous_hash = "fake_hash".to_string();
-        // Since we changed the data, we must recalculate the hash to bypass the self-verification check
-        // so we specifically isolate the linkage failure
         let new_hash = blockchain.chain[1].calculate_hash();
         blockchain.chain[1].hash = new_hash;
         
@@ -511,5 +537,4 @@ mod tests {
         let empty_results = blockchain.search_titles("", Some("Kampala"));
         assert_eq!(empty_results.len(), 0);
     }
-
 }

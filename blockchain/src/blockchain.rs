@@ -22,6 +22,7 @@ pub struct Block {
 pub struct Blockchain {
     pub db: sled::Db,
     pub chain: Vec<Block>,
+    pub state: std::collections::HashMap<String, LandTitle>,
 }
 
 impl Block {
@@ -85,6 +86,7 @@ impl Blockchain {
         Blockchain {
             db,
             chain: vec![genesis_block],
+            state: std::collections::HashMap::new(),
         }
     }
 
@@ -125,7 +127,35 @@ impl Blockchain {
             }
         }
 
-        Blockchain { db, chain }
+        let mut blockchain = Blockchain { db, chain, state: std::collections::HashMap::new() };
+        blockchain.rebuild_state();
+        blockchain
+    }
+
+    /// Rebuilds the memory state trie dynamically from the chain history
+    fn rebuild_state(&mut self) {
+        self.state.clear();
+        for block in &self.chain {
+            for tx in &block.transactions {
+                match tx {
+                    Transaction::Register { title } => {
+                        self.state.insert(title.title_id.clone(), title.clone());
+                    }
+                    Transaction::Transfer {
+                        title_id,
+                        to_owner,
+                        to_national_id,
+                        ..
+                    } => {
+                        if let Some(title) = self.state.get_mut(title_id) {
+                            title.owner_name = to_owner.clone();
+                            title.national_id = to_national_id.clone();
+                            title.status = TitleStatus::Active;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Save the newest block to the database (Append-only storage)
@@ -163,8 +193,7 @@ impl Blockchain {
     pub fn add_transaction(&mut self, transaction: Transaction) -> Result<&Block, String> {
         // Prevent duplicate title registration
         if let Transaction::Register { title } = &transaction {
-            let existing_titles = self.get_all_titles();
-            if existing_titles.iter().any(|t| {
+            if self.state.values().any(|t| {
                 t.plot_number.to_lowercase() == title.plot_number.to_lowercase()
                     && t.district.to_lowercase() == title.district.to_lowercase()
             }) {
@@ -178,13 +207,33 @@ impl Blockchain {
         let previous_hash = self.latest_block().hash.clone();
         let new_block = Block::new(
             self.chain.len() as u64,
-            vec![transaction],
+            vec![transaction.clone()],
             previous_hash,
         );
         self.chain.push(new_block.clone());
         
         // Persist only the new block directly to DB
         self.save_new_block(&new_block);
+
+        // Update state cache immediately for fast O(1) queries
+        match transaction {
+            Transaction::Register { title } => {
+                self.state.insert(title.title_id.clone(), title);
+            }
+            Transaction::Transfer {
+                title_id,
+                to_owner,
+                to_national_id,
+                ..
+            } => {
+                if let Some(title) = self.state.get_mut(&title_id) {
+                    title.owner_name = to_owner;
+                    title.national_id = to_national_id;
+                    title.status = TitleStatus::Active;
+                }
+            }
+        }
+
         Ok(self.chain.last().unwrap())
     }
 
@@ -232,39 +281,12 @@ impl Blockchain {
 
     /// Get all registered land titles (current state)
     pub fn get_all_titles(&self) -> Vec<LandTitle> {
-        let mut titles: std::collections::HashMap<String, LandTitle> =
-            std::collections::HashMap::new();
-
-        for block in &self.chain {
-            for tx in &block.transactions {
-                match tx {
-                    Transaction::Register { title } => {
-                        titles.insert(title.title_id.clone(), title.clone());
-                    }
-                    Transaction::Transfer {
-                        title_id,
-                        to_owner,
-                        to_national_id,
-                        ..
-                    } => {
-                        if let Some(title) = titles.get_mut(title_id) {
-                            title.owner_name = to_owner.clone();
-                            title.national_id = to_national_id.clone();
-                            title.status = TitleStatus::Active;
-                        }
-                    }
-                }
-            }
-        }
-
-        titles.into_values().collect()
+        self.state.values().cloned().collect()
     }
 
     /// Get a specific title by ID
     pub fn get_title(&self, title_id: &str) -> Option<LandTitle> {
-        self.get_all_titles()
-            .into_iter()
-            .find(|t| t.title_id == title_id)
+        self.state.get(title_id).cloned()
     }
 
     /// Get the full history of a title
@@ -289,8 +311,7 @@ impl Blockchain {
     /// Search titles by query
     pub fn search_titles(&self, query: &str, district: Option<&str>) -> Vec<LandTitle> {
         let query_lower = query.to_lowercase();
-        self.get_all_titles()
-            .into_iter()
+        self.state.values()
             .filter(|t| {
                 let matches_query = t.owner_name.to_lowercase().contains(&query_lower)
                     || t.district.to_lowercase().contains(&query_lower)
@@ -305,6 +326,7 @@ impl Blockchain {
 
                 matches_query && matches_district
             })
+            .cloned()
             .collect()
     }
 

@@ -4,7 +4,7 @@ mod models;
 
 use actix_cors::Cors;
 use actix_web::{web, App, HttpServer};
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 use blockchain::Blockchain;
 
@@ -17,7 +17,7 @@ async fn main() -> std::io::Result<()> {
     println!();
 
     let blockchain = Blockchain::load();
-    let data = web::Data::new(Mutex::new(blockchain));
+    let data = web::Data::new(RwLock::new(blockchain));
 
     println!("🚀 Starting server at http://localhost:8080");
     println!("📡 API endpoints:");

@@ -25,7 +25,10 @@ async fn main() -> std::io::Result<()> {
     println!("   GET  /api/titles/search   - Search titles");
     println!("   GET  /api/titles/{{id}}     - Get title by ID");
     println!("   POST /api/titles          - Register new title");
-    println!("   POST /api/titles/{{id}}/transfer - Transfer title");
+    println!("   POST /api/titles/{{id}}/transfer/initiate - Initiate transfer");
+    println!("   POST /api/titles/{{id}}/transfer/approve  - Approve transfer");
+    println!("   POST /api/titles/{{id}}/caveat            - Add caveat");
+    println!("   DELETE /api/titles/{{id}}/caveat/{{cid}}    - Remove caveat");
     println!("   GET  /api/chain           - View blockchain");
     println!("   GET  /api/chain/verify    - Verify integrity");
     println!("   GET  /api/stats           - Statistics");
@@ -54,10 +57,21 @@ async fn main() -> std::io::Result<()> {
             )
             .route("/api/titles", web::post().to(api::register_title))
             .route(
-                "/api/titles/{title_id}/transfer",
-                web::post().to(api::transfer_title),
+                "/api/titles/{title_id}/transfer/initiate",
+                web::post().to(api::initiate_transfer),
             )
-            // Chain endpoints
+            .route(
+                "/api/titles/{title_id}/transfer/approve",
+                web::post().to(api::approve_transfer),
+            )
+            .route(
+                "/api/titles/{title_id}/caveat",
+                web::post().to(api::add_caveat),
+            )
+            .route(
+                "/api/titles/{title_id}/caveat/{caveat_id}",
+                web::delete().to(api::remove_caveat),
+            )
             .route("/api/chain", web::get().to(api::get_chain))
             .route("/api/chain/verify", web::get().to(api::verify_chain))
             .route("/api/stats", web::get().to(api::get_stats))

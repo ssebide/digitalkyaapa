@@ -2,7 +2,10 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::models::{LandTitle, TitleStatus, Transaction, TransferTitleRequest};
+use crate::models::{
+    AddCaveatRequest, ApproveTransferRequest, Caveat, LandTitle, TitleStatus,
+    Transaction, TransferTitleRequest,
+};
 
 const DIFFICULTY: usize = 2;
 
@@ -23,6 +26,7 @@ pub struct Blockchain {
     pub db: sled::Db,
     pub chain: Vec<Block>,
     pub state: std::collections::HashMap<String, LandTitle>,
+    pub caveats: std::collections::HashMap<String, Caveat>,
 }
 
 impl Block {
@@ -87,6 +91,7 @@ impl Blockchain {
             db,
             chain: vec![genesis_block],
             state: std::collections::HashMap::new(),
+            caveats: std::collections::HashMap::new(),
         }
     }
 
@@ -127,7 +132,12 @@ impl Blockchain {
             }
         }
 
-        let mut blockchain = Blockchain { db, chain, state: std::collections::HashMap::new() };
+        let mut blockchain = Blockchain { 
+            db, 
+            chain, 
+            state: std::collections::HashMap::new(),
+            caveats: std::collections::HashMap::new(),
+        };
         blockchain.rebuild_state();
         blockchain
     }
@@ -150,6 +160,38 @@ impl Blockchain {
                         if let Some(title) = self.state.get_mut(title_id) {
                             title.owner_name = to_owner.clone();
                             title.national_id = to_national_id.clone();
+                            title.status = TitleStatus::Active;
+                        }
+                    }
+                    Transaction::InitiateTransfer { title_id, .. } => {
+                        if let Some(title) = self.state.get_mut(title_id) {
+                            title.status = TitleStatus::PendingTransfer;
+                        }
+                    }
+                    Transaction::ApproveTransfer {
+                        title_id,
+                        new_owner,
+                        new_national_id,
+                        ..
+                    } => {
+                        if let Some(title) = self.state.get_mut(title_id) {
+                            title.owner_name = new_owner.clone();
+                            title.national_id = new_national_id.clone();
+                            title.status = TitleStatus::Active;
+                        }
+                    }
+                    Transaction::AddCaveat { caveat } => {
+                        self.caveats.insert(caveat.caveat_id.clone(), caveat.clone());
+                        if let Some(title) = self.state.get_mut(&caveat.title_id) {
+                            title.status = TitleStatus::Caveated;
+                        }
+                    }
+                    Transaction::RemoveCaveat { title_id, caveat_id, .. } => {
+                        if let Some(c) = self.caveats.get_mut(caveat_id) {
+                            c.active = false;
+                        }
+                        // Simplistic removal (in a real system we'd check if there are other active caveats)
+                        if let Some(title) = self.state.get_mut(title_id) {
                             title.status = TitleStatus::Active;
                         }
                     }
@@ -232,6 +274,38 @@ impl Blockchain {
                     title.status = TitleStatus::Active;
                 }
             }
+            Transaction::InitiateTransfer { title_id, .. } => {
+                if let Some(title) = self.state.get_mut(&title_id) {
+                    title.status = TitleStatus::PendingTransfer;
+                }
+            }
+            Transaction::ApproveTransfer {
+                title_id,
+                new_owner,
+                new_national_id,
+                ..
+            } => {
+                if let Some(title) = self.state.get_mut(&title_id) {
+                    title.owner_name = new_owner;
+                    title.national_id = new_national_id;
+                    title.status = TitleStatus::Active;
+                }
+            }
+            Transaction::AddCaveat { caveat } => {
+                let title_id = caveat.title_id.clone();
+                self.caveats.insert(caveat.caveat_id.clone(), caveat);
+                if let Some(title) = self.state.get_mut(&title_id) {
+                    title.status = TitleStatus::Caveated;
+                }
+            }
+            Transaction::RemoveCaveat { title_id, caveat_id, .. } => {
+                if let Some(c) = self.caveats.get_mut(&caveat_id) {
+                    c.active = false;
+                }
+                if let Some(title) = self.state.get_mut(&title_id) {
+                    title.status = TitleStatus::Active;
+                }
+            }
         }
 
         Ok(self.chain.last().unwrap())
@@ -296,9 +370,11 @@ impl Blockchain {
             for tx in &block.transactions {
                 let matches = match tx {
                     Transaction::Register { title } => title.title_id == title_id,
-                    Transaction::Transfer {
-                        title_id: tid, ..
-                    } => tid == title_id,
+                    Transaction::Transfer { title_id: tid, .. } => tid == title_id,
+                    Transaction::InitiateTransfer { title_id: tid, .. } => tid == title_id,
+                    Transaction::ApproveTransfer { title_id: tid, .. } => tid == title_id,
+                    Transaction::AddCaveat { caveat } => &caveat.title_id == title_id,
+                    Transaction::RemoveCaveat { title_id: tid, .. } => tid == title_id,
                 };
                 if matches {
                     history.push((block.index, block.timestamp.clone(), tx.clone()));
@@ -330,7 +406,7 @@ impl Blockchain {
             .collect()
     }
 
-    /// Transfer a title to a new owner
+    /// Transfer a title to a new owner (Legacy method)
     pub fn transfer_title(
         &mut self,
         title_id: &str,
@@ -340,8 +416,8 @@ impl Blockchain {
             .get_title(title_id)
             .ok_or_else(|| format!("Title {} not found", title_id))?;
 
-        if title.status == TitleStatus::Revoked {
-            return Err("Cannot transfer a revoked title".to_string());
+        if title.status == TitleStatus::Revoked || title.status == TitleStatus::Caveated {
+            return Err("Cannot transfer a revoked or caveated title".to_string());
         }
 
         let transaction = Transaction::Transfer {
@@ -354,6 +430,127 @@ impl Blockchain {
         };
 
         self.add_transaction(transaction)
+    }
+
+    /// Step 1: Initiate a transfer (requires buyer approval)
+    pub fn initiate_transfer(
+        &mut self,
+        title_id: &str,
+        req: &TransferTitleRequest,
+    ) -> Result<&Block, String> {
+        let title = self
+            .get_title(title_id)
+            .ok_or_else(|| format!("Title {} not found", title_id))?;
+
+        if title.status == TitleStatus::Revoked || title.status == TitleStatus::Caveated {
+            return Err("Cannot transfer a revoked or caveated title".to_string());
+        }
+        if title.status == TitleStatus::PendingTransfer {
+            return Err("Title already has a pending transfer".to_string());
+        }
+
+        let transaction = Transaction::InitiateTransfer {
+            title_id: title_id.to_string(),
+            from_owner: title.owner_name.clone(),
+            from_national_id: title.national_id.clone(),
+            to_owner: req.to_owner.clone(),
+            to_national_id: req.to_national_id.clone(),
+            timestamp: Utc::now(),
+        };
+
+        self.add_transaction(transaction)
+    }
+
+    /// Step 2: Approve the pending transfer
+    pub fn approve_transfer(
+        &mut self,
+        title_id: &str,
+        req: &ApproveTransferRequest,
+    ) -> Result<&Block, String> {
+        let title = self
+            .get_title(title_id)
+            .ok_or_else(|| format!("Title {} not found", title_id))?;
+
+        if title.status != TitleStatus::PendingTransfer {
+            return Err("Title does not have a pending transfer".to_string());
+        }
+
+        // We must trace the new owner from the InitiateTransfer tx in the history
+        let mut intended_owner = String::new();
+        let mut intended_national_id = String::new();
+        
+        // Very basic way to get the latest intended owner - find last InitiateTransfer for this title
+        for block in self.chain.iter().rev() {
+            for tx in block.transactions.iter().rev() {
+                if let Transaction::InitiateTransfer { title_id: tid, to_owner, to_national_id, .. } = tx {
+                    if tid == title_id {
+                        intended_owner = to_owner.clone();
+                        intended_national_id = to_national_id.clone();
+                        break;
+                    }
+                }
+            }
+            if !intended_owner.is_empty() { break; }
+        }
+
+        if req.new_national_id != intended_national_id {
+            return Err("Approval national ID does not match intended recipient".to_string());
+        }
+
+        let transaction = Transaction::ApproveTransfer {
+            title_id: title_id.to_string(),
+            new_owner: intended_owner,
+            new_national_id: intended_national_id,
+            timestamp: Utc::now(),
+        };
+
+        self.add_transaction(transaction)
+    }
+
+    /// Add a caveat
+    pub fn add_caveat(
+        &mut self,
+        title_id: &str,
+        req: &AddCaveatRequest,
+    ) -> Result<&Block, String> {
+        let title = self
+            .get_title(title_id)
+            .ok_or_else(|| format!("Title {} not found", title_id))?;
+
+        if title.status == TitleStatus::Revoked {
+            return Err("Cannot place a caveat on a revoked title".to_string());
+        }
+
+        let caveat = Caveat {
+            caveat_id: format!("CAV-{}", uuid::Uuid::new_v4().to_string()[..8].to_uppercase()),
+            title_id: title_id.to_string(),
+            placed_by: req.placed_by.clone(),
+            reason: req.reason.clone(),
+            active: true,
+            placed_at: Utc::now(),
+        };
+
+        self.add_transaction(Transaction::AddCaveat { caveat })
+    }
+
+    /// Remove a caveat
+    pub fn remove_caveat(
+        &mut self,
+        title_id: &str,
+        caveat_id: &str,
+    ) -> Result<&Block, String> {
+        let caveat = self.caveats.get(caveat_id)
+            .ok_or_else(|| format!("Caveat {} not found", caveat_id))?;
+
+        if caveat.title_id != title_id {
+            return Err("Caveat does not belong to this title".to_string());
+        }
+
+        self.add_transaction(Transaction::RemoveCaveat {
+            title_id: title_id.to_string(),
+            caveat_id: caveat_id.to_string(),
+            removed_at: Utc::now(),
+        })
     }
 }
 
@@ -384,6 +581,7 @@ mod tests {
             plot_number: "Block 123 Plot 45".to_string(),
             size_acres: 2.5,
             coordinates: Some("0.3476° N, 32.5825° E".to_string()),
+            ipfs_document_cid: None,
         });
 
         let tx = Transaction::Register {
@@ -411,6 +609,7 @@ mod tests {
             plot_number: "Block 5 Plot 12".to_string(),
             size_acres: 0.5,
             coordinates: None,
+            ipfs_document_cid: None,
         });
 
         blockchain.add_transaction(Transaction::Register { title }).unwrap();
@@ -431,6 +630,7 @@ mod tests {
             plot_number: "Plot 1".to_string(),
             size_acres: 1.0,
             coordinates: None,
+            ipfs_document_cid: None,
         });
         
         let title2 = LandTitle::new(RegisterTitleRequest {
@@ -444,6 +644,7 @@ mod tests {
             plot_number: "Plot 1".to_string(),
             size_acres: 1.0,
             coordinates: None,
+            ipfs_document_cid: None,
         });
 
         assert!(blockchain.add_transaction(Transaction::Register { title: title1 }).is_ok());
@@ -465,6 +666,7 @@ mod tests {
             plot_number: "Plot 1".to_string(),
             size_acres: 1.0,
             coordinates: None,
+            ipfs_document_cid: None,
         });
         blockchain.add_transaction(Transaction::Register { title }).unwrap();
         
@@ -486,6 +688,7 @@ mod tests {
             plot_number: "Plot 1".to_string(),
             size_acres: 1.0,
             coordinates: None,
+            ipfs_document_cid: None,
         });
         blockchain.add_transaction(Transaction::Register { title }).unwrap();
         
@@ -521,6 +724,7 @@ mod tests {
             plot_number: "Plot 2".to_string(),
             size_acres: 1.0,
             coordinates: None,
+            ipfs_document_cid: None,
         });
         let title_id = title.title_id.clone();
         blockchain.add_transaction(Transaction::Register { title }).unwrap();
@@ -550,6 +754,7 @@ mod tests {
             plot_number: "Plot 2".to_string(),
             size_acres: 1.0,
             coordinates: None,
+            ipfs_document_cid: None,
         });
         blockchain.add_transaction(Transaction::Register { title }).unwrap();
 

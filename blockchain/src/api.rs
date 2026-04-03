@@ -3,7 +3,8 @@ use std::sync::RwLock;
 
 use crate::blockchain::Blockchain;
 use crate::models::{
-    ApiResponse, LandTitle, RegisterTitleRequest, SearchQuery, Transaction, TransferTitleRequest,
+    AddCaveatRequest, ApiResponse, ApproveTransferRequest, LandTitle, RegisterTitleRequest, 
+    SearchQuery, Transaction, TransferTitleRequest,
 };
 
 pub type BlockchainState = web::Data<RwLock<Blockchain>>;
@@ -128,8 +129,8 @@ pub async fn register_title(
     }
 }
 
-/// POST /api/titles/{title_id}/transfer — Transfer title ownership
-pub async fn transfer_title(
+/// POST /api/titles/{title_id}/transfer/initiate — Start title ownership transfer
+pub async fn initiate_transfer(
     blockchain: BlockchainState,
     path: web::Path<String>,
     body: web::Json<TransferTitleRequest>,
@@ -141,13 +142,13 @@ pub async fn transfer_title(
     let title_id = path.into_inner();
     let mut chain = write_chain!(blockchain);
 
-    match chain.transfer_title(&title_id, &body.into_inner()) {
+    match chain.initiate_transfer(&title_id, &body.into_inner()) {
         Ok(block) => {
             let block_index = block.index;
             let updated_title = chain.get_title(&title_id);
             HttpResponse::Ok().json(ApiResponse::success(
                 &format!(
-                    "Title {} transferred successfully in block #{}",
+                    "Title {} transfer initiated successfully in block #{}",
                     title_id, block_index
                 ),
                 updated_title,
@@ -156,6 +157,89 @@ pub async fn transfer_title(
         Err(e) => HttpResponse::BadRequest().json(ApiResponse::<LandTitle>::error(&e)),
     }
 }
+
+/// POST /api/titles/{title_id}/transfer/approve — Approve a pending transfer
+pub async fn approve_transfer(
+    blockchain: BlockchainState,
+    path: web::Path<String>,
+    body: web::Json<ApproveTransferRequest>,
+) -> HttpResponse {
+    if let Err(e) = body.validate() {
+        return HttpResponse::BadRequest().json(ApiResponse::<LandTitle>::error(&e.0));
+    }
+
+    let title_id = path.into_inner();
+    let mut chain = write_chain!(blockchain);
+
+    match chain.approve_transfer(&title_id, &body.into_inner()) {
+        Ok(block) => {
+            let block_index = block.index;
+            let updated_title = chain.get_title(&title_id);
+            HttpResponse::Ok().json(ApiResponse::success(
+                &format!(
+                    "Title {} transfer approved successfully in block #{}",
+                    title_id, block_index
+                ),
+                updated_title,
+            ))
+        }
+        Err(e) => HttpResponse::BadRequest().json(ApiResponse::<LandTitle>::error(&e)),
+    }
+}
+
+/// POST /api/titles/{title_id}/caveat — Add a caveat
+pub async fn add_caveat(
+    blockchain: BlockchainState,
+    path: web::Path<String>,
+    body: web::Json<AddCaveatRequest>,
+) -> HttpResponse {
+    if let Err(e) = body.validate() {
+        return HttpResponse::BadRequest().json(ApiResponse::<LandTitle>::error(&e.0));
+    }
+
+    let title_id = path.into_inner();
+    let mut chain = write_chain!(blockchain);
+
+    match chain.add_caveat(&title_id, &body.into_inner()) {
+        Ok(block) => {
+            let block_index = block.index;
+            let updated_title = chain.get_title(&title_id);
+            HttpResponse::Ok().json(ApiResponse::success(
+                &format!(
+                    "Caveat added to title {} in block #{}",
+                    title_id, block_index
+                ),
+                updated_title,
+            ))
+        }
+        Err(e) => HttpResponse::BadRequest().json(ApiResponse::<LandTitle>::error(&e)),
+    }
+}
+
+/// DELETE /api/titles/{title_id}/caveat/{caveat_id} — Remove a caveat
+pub async fn remove_caveat(
+    blockchain: BlockchainState,
+    path: web::Path<(String, String)>,
+) -> HttpResponse {
+    let (title_id, caveat_id) = path.into_inner();
+    let mut chain = write_chain!(blockchain);
+
+    match chain.remove_caveat(&title_id, &caveat_id) {
+        Ok(block) => {
+            let block_index = block.index;
+            let updated_title = chain.get_title(&title_id);
+            HttpResponse::Ok().json(ApiResponse::success(
+                &format!(
+                    "Caveat removed from title {} in block #{}",
+                    title_id, block_index
+                ),
+                updated_title,
+            ))
+        }
+        Err(e) => HttpResponse::BadRequest().json(ApiResponse::<LandTitle>::error(&e)),
+    }
+}
+
 
 /// GET /api/chain — View full blockchain
 pub async fn get_chain(blockchain: BlockchainState) -> HttpResponse {

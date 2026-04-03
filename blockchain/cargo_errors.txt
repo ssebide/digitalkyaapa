@@ -1,0 +1,85 @@
+﻿cargo :     Checking 
+digitalkyapa-blockchain 
+v0.1.0 (C:\Johnson\Rust\Pr
+ojects\digitalkyapa\blockc
+hain)
+At line:1 char:1
++ cargo check --color 
+never 2>&1 | Out-File 
+-Encoding utf8 
+cargo_errors ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (   
+     Checking di...apa\   
+ blockchain):String) [    
+], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+error[E0502]: cannot 
+borrow `chain` as 
+immutable because it is 
+also borrowed as mutable
+   --> src\api.rs:205:33
+    |
+203 |     match chain.add_
+caveat(&title_id, 
+&body.into_inner()) {
+    |           ----- 
+mutable borrow occurs here
+204 |         Ok(block) 
+=> {
+205 |             let 
+updated_title = chain.get_
+title(&title_id);
+    |                     
+            ^^^^^ 
+immutable borrow occurs 
+here
+...
+209 |                     
+title_id, block.index
+    |                     
+          ----------- 
+mutable borrow later used 
+here
+
+error[E0502]: cannot 
+borrow `chain` as 
+immutable because it is 
+also borrowed as mutable
+   --> src\api.rs:228:33
+    |
+226 |     match chain.remo
+ve_caveat(&title_id, 
+&caveat_id) {
+    |           ----- 
+mutable borrow occurs here
+227 |         Ok(block) 
+=> {
+228 |             let 
+updated_title = chain.get_
+title(&title_id);
+    |                     
+            ^^^^^ 
+immutable borrow occurs 
+here
+...
+232 |                     
+title_id, block.index
+    |                     
+          ----------- 
+mutable borrow later used 
+here
+
+For more information 
+about this error, try 
+`rustc --explain E0502`.
+error: could not compile 
+`digitalkyapa-blockchain` 
+(bin "digitalkyapa-blockch
+ain") due to 2 previous 
+errors

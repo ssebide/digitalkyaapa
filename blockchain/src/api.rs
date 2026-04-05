@@ -4,7 +4,7 @@ use std::sync::RwLock;
 use crate::blockchain::Blockchain;
 use crate::models::{
     AddCaveatRequest, ApiResponse, ApproveTransferRequest, LandTitle, RegisterTitleRequest, 
-    SearchQuery, Transaction, TransferTitleRequest,
+    SearchQuery, Transaction, TransferTitleRequest, RegisterLeaseRequest,
 };
 
 pub type BlockchainState = web::Data<RwLock<Blockchain>>;
@@ -240,6 +240,58 @@ pub async fn remove_caveat(
     }
 }
 
+/// POST /api/titles/{title_id}/lease — Register a lease
+pub async fn register_lease(
+    blockchain: BlockchainState,
+    path: web::Path<String>,
+    body: web::Json<RegisterLeaseRequest>,
+) -> HttpResponse {
+    if let Err(e) = body.validate() {
+        return HttpResponse::BadRequest().json(ApiResponse::<LandTitle>::error(&e.0));
+    }
+
+    let title_id = path.into_inner();
+    let mut chain = write_chain!(blockchain);
+
+    match chain.register_lease(&title_id, &body.into_inner()) {
+        Ok(block) => {
+            let block_index = block.index;
+            let updated_title = chain.get_title(&title_id);
+            HttpResponse::Ok().json(ApiResponse::success(
+                &format!(
+                    "Lease registered on title {} in block #{}",
+                    title_id, block_index
+                ),
+                updated_title,
+            ))
+        }
+        Err(e) => HttpResponse::BadRequest().json(ApiResponse::<LandTitle>::error(&e)),
+    }
+}
+
+/// DELETE /api/titles/{title_id}/lease/{lease_id} — Terminate a lease
+pub async fn terminate_lease(
+    blockchain: BlockchainState,
+    path: web::Path<(String, String)>,
+) -> HttpResponse {
+    let (title_id, lease_id) = path.into_inner();
+    let mut chain = write_chain!(blockchain);
+
+    match chain.terminate_lease(&title_id, &lease_id) {
+        Ok(block) => {
+            let block_index = block.index;
+            let updated_title = chain.get_title(&title_id);
+            HttpResponse::Ok().json(ApiResponse::success(
+                &format!(
+                    "Lease terminated from title {} in block #{}",
+                    title_id, block_index
+                ),
+                updated_title,
+            ))
+        }
+        Err(e) => HttpResponse::BadRequest().json(ApiResponse::<LandTitle>::error(&e)),
+    }
+}
 
 /// GET /api/chain — View full blockchain
 pub async fn get_chain(blockchain: BlockchainState) -> HttpResponse {

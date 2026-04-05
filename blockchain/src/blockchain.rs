@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 
 use crate::models::{
     AddCaveatRequest, ApproveTransferRequest, Caveat, LandTitle, TitleStatus,
-    Transaction, TransferTitleRequest,
+    Transaction, TransferTitleRequest, Lease, RegisterLeaseRequest,
 };
 
 const DIFFICULTY: usize = 2;
@@ -195,6 +195,18 @@ impl Blockchain {
                             title.status = TitleStatus::Active;
                         }
                     }
+                    Transaction::RegisterLease { lease } => {
+                        if let Some(title) = self.state.get_mut(&lease.title_id) {
+                            title.active_leases.push(lease.clone());
+                        }
+                    }
+                    Transaction::TerminateLease { title_id, lease_id, .. } => {
+                        if let Some(title) = self.state.get_mut(title_id) {
+                            if let Some(l) = title.active_leases.iter_mut().find(|l| &l.lease_id == lease_id) {
+                                l.active = false;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -306,6 +318,18 @@ impl Blockchain {
                     title.status = TitleStatus::Active;
                 }
             }
+            Transaction::RegisterLease { lease } => {
+                if let Some(title) = self.state.get_mut(&lease.title_id) {
+                    title.active_leases.push(lease);
+                }
+            }
+            Transaction::TerminateLease { title_id, lease_id, .. } => {
+                if let Some(title) = self.state.get_mut(&title_id) {
+                    if let Some(l) = title.active_leases.iter_mut().find(|l| l.lease_id == lease_id) {
+                        l.active = false;
+                    }
+                }
+            }
         }
 
         Ok(self.chain.last().unwrap())
@@ -375,6 +399,8 @@ impl Blockchain {
                     Transaction::ApproveTransfer { title_id: tid, .. } => tid == title_id,
                     Transaction::AddCaveat { caveat } => &caveat.title_id == title_id,
                     Transaction::RemoveCaveat { title_id: tid, .. } => tid == title_id,
+                    Transaction::RegisterLease { lease } => &lease.title_id == title_id,
+                    Transaction::TerminateLease { title_id: tid, .. } => tid == title_id,
                 };
                 if matches {
                     history.push((block.index, block.timestamp.clone(), tx.clone()));
@@ -552,6 +578,55 @@ impl Blockchain {
             removed_at: Utc::now(),
         })
     }
+
+    /// Register a Lease
+    pub fn register_lease(
+        &mut self,
+        title_id: &str,
+        req: &RegisterLeaseRequest,
+    ) -> Result<&Block, String> {
+        let title = self
+            .get_title(title_id)
+            .ok_or_else(|| format!("Title {} not found", title_id))?;
+
+        if title.status == TitleStatus::Revoked || title.status == TitleStatus::Caveated {
+            return Err("Cannot lease a revoked or caveated title".to_string());
+        }
+
+        let lease = Lease {
+            lease_id: format!("LSE-{}", uuid::Uuid::new_v4().to_string()[..8].to_uppercase()),
+            title_id: title_id.to_string(),
+            lessee_name: req.lessee_name.clone(),
+            lessee_national_id: req.lessee_national_id.clone(),
+            duration_months: req.duration_months,
+            start_date: Utc::now(),
+            active: true,
+        };
+
+        self.add_transaction(Transaction::RegisterLease { lease })
+    }
+
+    /// Terminate a Lease
+    pub fn terminate_lease(
+        &mut self,
+        title_id: &str,
+        lease_id: &str,
+    ) -> Result<&Block, String> {
+        let title = self
+            .get_title(title_id)
+            .ok_or_else(|| format!("Title {} not found", title_id))?;
+
+        let has_lease = title.active_leases.iter().any(|l| l.lease_id == lease_id && l.active);
+        if !has_lease {
+            return Err("Active lease does not exist for this property".to_string());
+        }
+
+        self.add_transaction(Transaction::TerminateLease {
+            title_id: title_id.to_string(),
+            lease_id: lease_id.to_string(),
+            terminated_at: Utc::now(),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -582,6 +657,7 @@ mod tests {
             size_acres: 2.5,
             coordinates: Some("0.3476° N, 32.5825° E".to_string()),
             ipfs_document_cid: None,
+            zoning: crate::models::ZoningType::Residential,
         });
 
         let tx = Transaction::Register {
@@ -610,6 +686,7 @@ mod tests {
             size_acres: 0.5,
             coordinates: None,
             ipfs_document_cid: None,
+            zoning: crate::models::ZoningType::Residential,
         });
 
         blockchain.add_transaction(Transaction::Register { title }).unwrap();
@@ -631,6 +708,7 @@ mod tests {
             size_acres: 1.0,
             coordinates: None,
             ipfs_document_cid: None,
+            zoning: crate::models::ZoningType::Residential,
         });
         
         let title2 = LandTitle::new(RegisterTitleRequest {
@@ -645,6 +723,7 @@ mod tests {
             size_acres: 1.0,
             coordinates: None,
             ipfs_document_cid: None,
+            zoning: crate::models::ZoningType::Residential,
         });
 
         assert!(blockchain.add_transaction(Transaction::Register { title: title1 }).is_ok());
@@ -667,6 +746,7 @@ mod tests {
             size_acres: 1.0,
             coordinates: None,
             ipfs_document_cid: None,
+            zoning: crate::models::ZoningType::Residential,
         });
         blockchain.add_transaction(Transaction::Register { title }).unwrap();
         
@@ -689,6 +769,7 @@ mod tests {
             size_acres: 1.0,
             coordinates: None,
             ipfs_document_cid: None,
+            zoning: crate::models::ZoningType::Residential,
         });
         blockchain.add_transaction(Transaction::Register { title }).unwrap();
         
@@ -725,6 +806,7 @@ mod tests {
             size_acres: 1.0,
             coordinates: None,
             ipfs_document_cid: None,
+            zoning: crate::models::ZoningType::Residential,
         });
         let title_id = title.title_id.clone();
         blockchain.add_transaction(Transaction::Register { title }).unwrap();
@@ -755,6 +837,7 @@ mod tests {
             size_acres: 1.0,
             coordinates: None,
             ipfs_document_cid: None,
+            zoning: crate::models::ZoningType::Residential,
         });
         blockchain.add_transaction(Transaction::Register { title }).unwrap();
 

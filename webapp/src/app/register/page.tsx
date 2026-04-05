@@ -50,6 +50,7 @@ export default function RegisterPage() {
       plot_number: formData.get("plot_number") as string,
       size_acres: parseFloat(formData.get("size_acres") as string),
       coordinates: (formData.get("coordinates") as string) || null,
+      zoning: formData.get("zoning") as string,
     };
 
     try {
@@ -166,6 +167,18 @@ export default function RegisterPage() {
             <div className="form-group">
               <label>Acreage</label>
               <input type="number" name="size_acres" className="input-modern" step="0.01" min="0.01" required placeholder="2.5" />
+            </div>
+            <div className="form-group">
+              <label>Zoning Type</label>
+              <select name="zoning" className="input-modern" required style={{ appearance: "none" }}>
+                <option value="">Select Zoning</option>
+                <option value="Residential">Residential</option>
+                <option value="Commercial">Commercial</option>
+                <option value="Agricultural">Agricultural</option>
+                <option value="Industrial">Industrial</option>
+                <option value="MixedUse">Mixed Use</option>
+                <option value="Unzoned">Unzoned</option>
+              </select>
             </div>
             <div className="form-group">
               <label>GPS Coordinates</label>

@@ -29,6 +29,8 @@ async fn main() -> std::io::Result<()> {
     println!("   POST /api/titles/{{id}}/transfer/approve  - Approve transfer");
     println!("   POST /api/titles/{{id}}/caveat            - Add caveat");
     println!("   DELETE /api/titles/{{id}}/caveat/{{cid}}    - Remove caveat");
+    println!("   POST /api/titles/{{id}}/lease             - Register a lease");
+    println!("   DELETE /api/titles/{{id}}/lease/{{lid}}     - Terminate a lease");
     println!("   GET  /api/chain           - View blockchain");
     println!("   GET  /api/chain/verify    - Verify integrity");
     println!("   GET  /api/stats           - Statistics");
@@ -71,6 +73,14 @@ async fn main() -> std::io::Result<()> {
             .route(
                 "/api/titles/{title_id}/caveat/{caveat_id}",
                 web::delete().to(api::remove_caveat),
+            )
+            .route(
+                "/api/titles/{title_id}/lease",
+                web::post().to(api::register_lease),
+            )
+            .route(
+                "/api/titles/{title_id}/lease/{lease_id}",
+                web::delete().to(api::terminate_lease),
             )
             .route("/api/chain", web::get().to(api::get_chain))
             .route("/api/chain/verify", web::get().to(api::verify_chain))

@@ -18,20 +18,34 @@ interface LandTitle {
   ipfs_document_cid: string | null;
   registered_at: string;
   status: string;
+  zoning: string;
+  active_leases: Lease[];
 }
 
-interface HistoryEntry {
-  0: number; // block index
-  1: string; // timestamp
-  2: {
+interface Lease {
+  lease_id: string;
+  title_id: string;
+  lessee_name: string;
+  lessee_national_id: string;
+  duration_months: number;
+  start_date: string;
+  active: boolean;
+}
+
+type HistoryEntry = [
+  number, // block index
+  string, // timestamp
+  {
     Register?: { title: LandTitle };
     Transfer?: { from_owner: string; to_owner: string };
     InitiateTransfer?: { from_owner: string; to_owner: string };
     ApproveTransfer?: { new_owner: string };
     AddCaveat?: { caveat: { placed_by: string; reason: string } };
     RemoveCaveat?: { removed_at: string };
-  };
-}
+    RegisterLease?: { lease: Lease };
+    TerminateLease?: { lease_id: string; terminated_at: string };
+  }
+];
 
 export default function TitleDetailPage() {
   const params = useParams();
@@ -44,6 +58,7 @@ export default function TitleDetailPage() {
 
   const [showTransfer, setShowTransfer] = useState(false);
   const [showCaveatForm, setShowCaveatForm] = useState(false);
+  const [showLeaseForm, setShowLeaseForm] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
 
@@ -148,6 +163,26 @@ export default function TitleDetailPage() {
     handleAction(`/caveat/${caveatId}`, "DELETE", null, "Caveat successfully lifted.", () => {});
   };
 
+  const handleRegisterLease = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    handleAction(
+      "/lease",
+      "POST",
+      { 
+          lessee_name: formData.get("lessee_name"), 
+          lessee_national_id: formData.get("lessee_national_id"),
+          duration_months: parseInt(formData.get("duration_months") as string)
+      },
+      "Lease successfully registered on chain.",
+      () => setShowLeaseForm(false)
+    );
+  };
+
+  const handleTerminateLease = (leaseId: string) => {
+    handleAction(`/lease/${leaseId}`, "DELETE", null, "Lease terminated.", () => {});
+  };
+
   // Helper to find active caveat ID from history (if we need to remove it)
   // For UI simplicity, we just grab the last caveat ID from history that hasn't been removed
   const getLatestCaveatId = () => {
@@ -210,6 +245,20 @@ export default function TitleDetailPage() {
         </div>
       )}
 
+      {title.active_leases?.filter(l => l.active).map(lease => (
+          <div key={lease.lease_id} className="banner animate-fade-up" style={{ marginBottom: 24, padding: "16px 20px", background: "rgba(59, 130, 246, 0.1)", border: "1px solid rgba(59, 130, 246, 0.3)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <strong style={{ fontSize: "1.1rem", color: "#3B82F6" }}>ACTIVE LEASE ({lease.duration_months} Months)</strong>
+                    <p style={{ marginTop: 8, fontSize: "0.9rem", color: "#93C5FD" }}>Leased to {lease.lessee_name} ({lease.lessee_national_id}). Registered on {formatDate(lease.start_date)}.</p>
+                  </div>
+                  <button className="btn btn-secondary" onClick={() => handleTerminateLease(lease.lease_id)} style={{ padding: "8px 16px", borderColor: "rgba(59, 130, 246, 0.5)", color: "#93C5FD" }} disabled={actionLoading}>
+                    Terminate
+                  </button>
+              </div>
+          </div>
+      ))}
+
       <div className="animate-fade-up">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12 }}>
             <div>
@@ -261,6 +310,10 @@ export default function TitleDetailPage() {
           <div className="detail-label">Village</div>
           <div className="detail-val">{title.village}</div>
         </div>
+        <div className="detail-item">
+          <div className="detail-label">Zoning Type</div>
+          <div className="detail-val">{title.zoning}</div>
+        </div>
         <div className="detail-item" style={{ gridColumn: "1 / -1" }}>
           <div className="detail-label">Geographical Coordinates</div>
           <div className="detail-val" style={{ color: "var(--text-muted)" }}>{title.coordinates || "Unmapped Protocol Area"}</div>
@@ -272,11 +325,14 @@ export default function TitleDetailPage() {
             <div className="detail-val">Plot {title.plot_number} ({title.size_acres} Acres)</div>
           </div>
           <div style={{ display: "flex", gap: 12 }}>
-            <button className="btn btn-secondary" onClick={() => { setShowTransfer(false); setShowCaveatForm(!showCaveatForm); }}>
+            <button className="btn btn-secondary" onClick={() => { setShowTransfer(false); setShowCaveatForm(false); setShowLeaseForm(!showLeaseForm); }}>
+                Manage Leases
+            </button>
+            <button className="btn btn-secondary" onClick={() => { setShowTransfer(false); setShowLeaseForm(false); setShowCaveatForm(!showCaveatForm); }}>
                 Manage Caveats
             </button>
             {title.status !== "Revoked" && title.status !== "Caveated" && (
-                <button className="btn btn-primary" onClick={() => { setShowCaveatForm(false); setShowTransfer(!showTransfer); }}>
+                <button className="btn btn-primary" onClick={() => { setShowCaveatForm(false); setShowLeaseForm(false); setShowTransfer(!showTransfer); }}>
                 {title.status === "PendingTransfer" ? "Approve Transfer" : "Initiate Transfer"}
                 </button>
             )}
@@ -361,6 +417,35 @@ export default function TitleDetailPage() {
         </div>
       )}
 
+      {showLeaseForm && (
+        <div className="glass-card animate-fade-up" style={{ marginBottom: 40, border: "1px solid rgba(59, 130, 246, 0.4)" }}>
+            <h3 style={{ fontFamily: "Space Grotesk", fontSize: "1.2rem", marginBottom: 20, color: "#3B82F6" }}>Register New Property Lease</h3>
+            <form onSubmit={handleRegisterLease}>
+                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                    <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+                      <label>Lessee (Tenant) Full Name</label>
+                      <input type="text" className="input-modern" name="lessee_name" required placeholder="Name of Person or Company leasing" />
+                    </div>
+                    <div className="form-group">
+                      <label>Lessee National ID</label>
+                      <input type="text" className="input-modern" name="lessee_national_id" required placeholder="ID Number" />
+                    </div>
+                    <div className="form-group">
+                      <label>Duration (Months)</label>
+                      <input type="number" className="input-modern" name="duration_months" required min="1" placeholder="e.g. 12" />
+                    </div>
+                    
+                    <div style={{ gridColumn: "1 / -1", display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 12 }}>
+                    <button type="button" className="btn btn-secondary" onClick={() => setShowLeaseForm(false)}>Abort</button>
+                    <button type="submit" className="btn btn-accent" style={{ background: "#3B82F6", color: "#fff" }} disabled={actionLoading}>
+                        {actionLoading ? "Awaiting Block..." : "Register Lease"}
+                    </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+      )}
+
       <div className="animate-fade-up delay-2">
         <h2 style={{ fontFamily: "Space Grotesk", fontSize: "1.8rem", marginBottom: 12 }}>Ledger Provenance</h2>
         <p style={{ color: "var(--text-muted)", marginBottom: 32 }}>Immutable cryptographic history of ownership and encumbrances.</p>
@@ -377,11 +462,13 @@ export default function TitleDetailPage() {
               const isApproveTransfer = !!tx.ApproveTransfer;
               const isCaveat = !!tx.AddCaveat;
               const isRemoveCaveat = !!tx.RemoveCaveat;
+              const isRegisterLease = !!tx.RegisterLease;
+              const isTerminateLease = !!tx.TerminateLease;
 
               return (
                 <div key={i} className="timeline-event">
                   <div className="timeline-dot" style={{ 
-                      background: isCaveat ? "var(--accent-red)" : (isInitTransfer ? "var(--text-muted)" : "")
+                      background: isCaveat ? "var(--accent-red)" : (isInitTransfer ? "var(--text-muted)" : (isRegisterLease ? "#3B82F6" : ""))
                    }} />
                   <div className="timeline-date">Block Hash Index #{blockIndex} • {formatDate(timestamp)}</div>
                   <div className="timeline-content">
@@ -420,6 +507,18 @@ export default function TitleDetailPage() {
                          <div>
                          <strong style={{ color: "var(--accent-green)" }}>Caveat Lifted</strong><br />
                          The title has been cleared for transfer.
+                       </div>
+                    )}
+                    {isRegisterLease && (
+                         <div>
+                         <strong style={{ color: "#3B82F6" }}>Lease Registered</strong><br />
+                         Leased to <strong style={{ color: "var(--text-main)" }}>{(tx.RegisterLease as any)?.lease?.lessee_name}</strong> for {(tx.RegisterLease as any)?.lease?.duration_months} months.
+                       </div>
+                    )}
+                    {isTerminateLease && (
+                         <div>
+                         <strong style={{ color: "var(--text-muted)" }}>Lease Terminated</strong><br />
+                         The lease agreement has been terminated and returned to full owner control.
                        </div>
                     )}
                   </div>

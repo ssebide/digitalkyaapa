@@ -19,6 +19,18 @@ pub struct LandTitle {
     pub ipfs_document_cid: Option<String>,
     pub registered_at: DateTime<Utc>,
     pub status: TitleStatus,
+    pub zoning: ZoningType,
+    pub active_leases: Vec<Lease>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ZoningType {
+    Residential,
+    Commercial,
+    Agricultural,
+    Industrial,
+    MixedUse,
+    Unzoned,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -40,6 +52,18 @@ pub struct Caveat {
     pub reason: String,
     pub active: bool,
     pub placed_at: DateTime<Utc>,
+}
+
+/// Represents a lease on a title
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Lease {
+    pub lease_id: String,
+    pub title_id: String,
+    pub lessee_name: String,
+    pub lessee_national_id: String,
+    pub duration_months: u32,
+    pub start_date: DateTime<Utc>,
+    pub active: bool,
 }
 
 /// Transaction types that can be recorded on the blockchain
@@ -78,6 +102,14 @@ pub enum Transaction {
         caveat_id: String,
         removed_at: DateTime<Utc>,
     },
+    RegisterLease {
+        lease: Lease,
+    },
+    TerminateLease {
+        title_id: String,
+        lease_id: String,
+        terminated_at: DateTime<Utc>,
+    },
 }
 
 /// Validation error type
@@ -107,6 +139,7 @@ pub struct RegisterTitleRequest {
     pub size_acres: f64,
     pub coordinates: Option<String>,
     pub ipfs_document_cid: Option<String>,
+    pub zoning: ZoningType,
 }
 
 impl RegisterTitleRequest {
@@ -187,6 +220,30 @@ impl AddCaveatRequest {
     }
 }
 
+/// Request body for registering a lease
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RegisterLeaseRequest {
+    pub lessee_name: String,
+    pub lessee_national_id: String,
+    pub duration_months: u32,
+}
+
+impl RegisterLeaseRequest {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.lessee_name.trim().is_empty() {
+            return Err(ValidationError("Lessee name cannot be empty".into()));
+        }
+        if self.lessee_national_id.trim().is_empty() {
+            return Err(ValidationError("Lessee national ID cannot be empty".into()));
+        }
+        if self.duration_months == 0 {
+            return Err(ValidationError("Lease duration must be greater than 0".into()));
+        }
+        Ok(())
+    }
+}
+
 /// Request body for approving a transfer
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -253,6 +310,8 @@ impl LandTitle {
             ipfs_document_cid: req.ipfs_document_cid.map(|c| c.trim().to_string()),
             registered_at: Utc::now(),
             status: TitleStatus::Active,
+            zoning: req.zoning,
+            active_leases: Vec::new(),
         }
     }
 }
